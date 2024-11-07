@@ -6,14 +6,11 @@ import uuid
 import base64
 import argparse
 import subprocess
-import pprint
 from websocket import WebSocketApp
 import boto3
-from botocore.auth import SigV4Auth
-from botocore.awsrequest import AWSRequest
-from botocore.credentials import Credentials
-from urllib.parse import urlparse
-from boto3.session import Session
+import time
+
+appsync = boto3.client('appsync')
 
 DEFAULT_HEADERS = {
     'accept': 'application/json, text/javascript',
@@ -29,9 +26,16 @@ def parse_args():
 
 def get_api(api_id):
     try:
-        appsync = boto3.client('appsync')
         response = appsync.get_api(apiId=api_id)
         return response['api']
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        sys.exit(1)
+
+def get_api_key(api_id):
+    try:
+        response = appsync.list_api_keys(apiId=api_id)
+        return response['apiKeys'][0]
     except Exception as e:
         print(f"Error: {str(e)}")
         sys.exit(1)
@@ -40,34 +44,13 @@ def get_session_token():
     sts = boto3.client('sts')
     return sts.get_session_token()
 
-def sign(api, body, credentials):
-    url = f"https://{api['dns']['HTTP']}/event"
-    request = AWSRequest(
-        method='POST',
-        url=url,
-        data=json.dumps(body) if body else '{}',
-        headers=DEFAULT_HEADERS
-    )
-
-    auth = SigV4Auth(credentials, 'appsync', boto3.session.Session().region_name) #, api['region'])
-    auth.add_auth(request)
-    request.prepare()
-    
-    parsed_url = urlparse(url)
-    signed = {'host': parsed_url.netloc}
-    # for key, value in dict(request.headers).items():
-    #     signed[key.lower()] = value
-    signed.update(dict(request.headers))
-    return signed
-
-def get_base64_url_encoded(api, body, credentials):
-    signed = sign(api, body, credentials)
-    json_str = json.dumps(signed)
+def get_base64_url_encoded(auth):
+    json_str = json.dumps(auth)
     b64 = base64.b64encode(json_str.encode()).decode()
     return b64.replace('+', '-').replace('/', '_').rstrip('=')
 
-def get_auth_protocol(api, body, credentials):
-    header = get_base64_url_encoded(api, body, credentials)
+def get_auth_protocol(auth):
+    header = get_base64_url_encoded(auth)
     return f"header-{header}"
 
 def on_message(ws, message):
@@ -87,29 +70,21 @@ def on_open(ws):
         'channel': args.channel
     }
     print(f"<< {subscribe_msg}")
-    auth = sign(api, {'channel': args.channel}, credentials)
     msg = {**subscribe_msg, 'authorization': auth}
-
-    pprint.pprint(msg)
     ws.send(json.dumps(msg))
 
 if __name__ == "__main__":
     args = parse_args()
     api = get_api(args.api_id)
-    tokens = get_session_token()
+    api_key = get_api_key(args.api_id)
     
-    credentials = Credentials(
-        tokens['Credentials']['AccessKeyId'],
-        tokens['Credentials']['SecretAccessKey'],
-        tokens['Credentials']['SessionToken']
-    )
-    
-    auth = get_auth_protocol(api, None, credentials)
+    auth = {'host': api['dns']['HTTP'], 'x-api-key': api_key['id']}
+    auth_protocol = f"header-{get_base64_url_encoded(auth)}"
 
     ws = WebSocketApp(
         f"wss://{api['dns']['REALTIME']}/event/realtime",
         header=DEFAULT_HEADERS,
-        subprotocols=['aws-appsync-event-ws', auth],
+        subprotocols=['aws-appsync-event-ws', auth_protocol],
         on_open=on_open,
         on_message=on_message,
         on_error=on_error,
