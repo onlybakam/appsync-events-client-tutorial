@@ -6,12 +6,14 @@ import uuid
 import base64
 import argparse
 import subprocess
+import pprint
 from websocket import WebSocketApp
 import boto3
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.credentials import Credentials
 from urllib.parse import urlparse
+from boto3.session import Session
 
 DEFAULT_HEADERS = {
     'accept': 'application/json, text/javascript',
@@ -46,14 +48,16 @@ def sign(api, body, credentials):
         data=json.dumps(body) if body else '{}',
         headers=DEFAULT_HEADERS
     )
-    
+
     auth = SigV4Auth(credentials, 'appsync', boto3.session.Session().region_name) #, api['region'])
     auth.add_auth(request)
+    request.prepare()
     
     parsed_url = urlparse(url)
     signed = {'host': parsed_url.netloc}
-    signed.update(dict(request.headers))
-    # print(signed)
+    for key, value in dict(request.headers).items():
+        signed[key.lower()] = value
+    # signed.update(dict(request.headers))
     return signed
 
 def get_base64_url_encoded(api, body, credentials):
@@ -84,10 +88,21 @@ def on_open(ws):
     }
     print(f"<< {subscribe_msg}")
     auth = sign(api, {'channel': args.channel}, credentials)
-    print()
-    print({**subscribe_msg, 'authorization': auth})
-    print()
-    ws.send(json.dumps({**subscribe_msg, 'authorization': auth}))
+    msg = {**subscribe_msg, 'authorization': {**auth}}
+    msgx = {**subscribe_msg, 'authorization': {
+
+  'host': 'xwql6zuqafhwbptsf6u4ufbdde.appsync-api.us-east-2.amazonaws.com',
+  'accept': 'application/json, text/javascript',
+  'authorization': 'AWS4-HMAC-SHA256 Credential=ASIA2MQYWVYTGDL34NKB/20241107/us-east-2/appsync/aws4_request, SignedHeaders=accept;content-encoding;host;x-amz-date;x-amz-security-token, Signature=0147b3ebda8c308b290f5bff0f4bea9c19404bd1f862b9e7084774d95c8775a5',
+  'content-encoding': 'amz-1.0',
+  'content-type': 'application/json; charset=UTF-8',
+  'x-amz-date': '20241107T025919Z',
+  'X-Amz-Security-Token': 'IQoJb3JpZ2luX2VjELP//////////wEaCXVzLWVhc3QtMiJGMEQCIAZ3EXbjT0OdCoHg1I4Gio7/ezSQdbz7/YwYZXAx6OcqAiBOWejFdeWj++f0e0aiT+y/cwGHl9JBjJ3qP8Q0FJMreyrrAQg8EAQaDDcxNDA5MDEzMDk4MiIMbussSYxltJAtwcgZKsgBkwu3AX0D29lktBoI8a49OaeIqEvwtJJ3LGzRL0lTGo9udnZhp5JXlCS5iE4qYbLuxBH2cfV8TCpixzT4DnEZYl4AENNBSYZc8xBbk5Zho7Wt3rpGcWHreOkqvVOV8Iwzl9ddXIXiybd6CZtDVgHzkPTbzcsfuLQ4NbuKiBcNS4PiLUgWg115AmQz2zKG8IAMga45fYkI7X2huSzfAeDsqNN2ho93CyLIG0tK72RnPjh70js6SpRhRCxLJj+IqAyZORUlg2H+8c8whtqwuQY6mQFFoeFFcYpxAHS3b1/Jwz9+uPbWkgv7fwwPKYDUvAWOuTJTM0GOKcm5iP9/wv7PwU7Pczwy6XSIZ4vUjtDVCAqfJinEZfmOroU7J0lDs06FjShcem7gr9uB2dZ+eJT4Pn4SZI6SAaF+aKNXXGUpHV6bEcoipsyJa7VDKysy2haHdavDDSWX5eWlLV8AcefzdBJ54pfuGBQEkSU='
+
+
+    }}
+    pprint.pprint(msg)
+    ws.send(json.dumps(msg))
 
 if __name__ == "__main__":
     args = parse_args()
