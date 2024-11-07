@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "listen": "zx app/subscriber.mjs"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +21,11 @@
     "typescript": "^5.6.3"
   },
   "dependencies": {
-    "aws-amplify": "^6.8.0"
+    "@aws-appsync/utils": "^1.10.1",
+    "@faker-js/faker": "^9.2.0",
+    "aws-amplify": "^6.8.0",
+    "aws4fetch": "^1.0.20",
+    "ws": "^8.18.0",
+    "zx": "^8.2.0"
   }
 }

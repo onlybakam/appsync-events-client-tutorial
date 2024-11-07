@@ -1,11 +1,12 @@
-import { defineBackend } from '@aws-amplify/backend';
-import { auth } from './auth/resource';
-import { data } from './data/resource';
+import { defineBackend } from '@aws-amplify/backend'
+import { publisherFn } from './functions/publisher/resource'
+import * as iam from 'aws-cdk-lib/aws-iam'
 
-/**
- * @see https://docs.amplify.aws/react/build-a-backend/ to add storage, functions, and more
- */
-defineBackend({
-  auth,
-  data,
-});
+const backend = defineBackend({ publisherFn })
+
+backend.publisherFn.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['appsync:EventPublish'],
+    resources: ['*'],
+  }),
+)
