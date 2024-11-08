@@ -83,8 +83,6 @@ async function sign(api, body) {
     signed[k] = v
   }
 
-  console.log(signed)
-
   return signed
 }
 
