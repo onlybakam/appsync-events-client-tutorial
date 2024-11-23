@@ -2,14 +2,7 @@
 
 import { WebSocket } from 'ws'
 import { AppSyncClient, GetApiCommand } from '@aws-sdk/client-appsync'
-import { getAuthProtocolForIAM, signWithAWSV4 } from './signer-smithy.mjs'
-import { log } from 'zx'
-
-const DEFAULT_HEADERS = {
-  accept: 'application/json, text/javascript',
-  'content-encoding': 'amz-1.0',
-  'content-type': 'application/json; charset=UTF-8',
-}
+import { getAuthProtocolForIAM, signWithAWSV4, DEFAULT_HEADERS } from './signer-smithy.mjs'
 
 let kaCount = 0
 
@@ -19,18 +12,19 @@ const argv = minimist(process.argv.slice(2), { string: ['api-id', 'channel', 'do
 if (!argv['api-id'] && !argv.domain) {
   console.log(
     chalk.red(
-      'Usage: subscribe --api-id <id> | --domain <domain> [--channel <path> --region <region>]',
+      'Usage: subscribe --api-id <id> | --domain <domain> --region <region> [--channel <path>]',
     ),
   )
   process.exit(1)
 }
+
 if (argv['api-id'] && argv.domain) {
   console.log(chalk.red('Cannot specify api ID and domain name at the same time'))
   process.exit(1)
 }
 
-if (argv.domain && !argv.region) {
-  console.log(chalk.red('You must specify a region when using a custom domain'))
+if (!argv.region) {
+  console.log(chalk.red('Region is required'))
   process.exit(1)
 }
 
@@ -54,10 +48,8 @@ const httpDomain = argv.domain ?? api.dns.HTTP
 const wsDomain = argv.domain ?? api.dns.REALTIME
 const auth = await getAuthProtocolForIAM(httpDomain, region)
 
-console.log(auth)
-
 // Connect to the WebSocket
-console.log(`[ Opening WebSocket to wss://${wsDomain}/event/realtime ]`)
+console.log(`\n[ Opening WebSocket to wss://${wsDomain}/event/realtime ]\n`)
 
 const socket = await new Promise((resolve, reject) => {
   const socket = new WebSocket(`wss://${wsDomain}/event/realtime`, ['aws-appsync-event-ws', auth], {
@@ -65,7 +57,9 @@ const socket = await new Promise((resolve, reject) => {
   })
 
   socket.onopen = () => {
-    socket.send(JSON.stringify({ type: 'connection_init' }))
+    const initMsg = { type: 'connection_init' }
+    socket.send(JSON.stringify(initMsg))
+    console.log(chalk.blue.bold('<<'), initMsg)
     resolve(socket)
   }
   socket.onclose = (evt) => reject(new Error(evt.reason))
@@ -80,7 +74,7 @@ console.log(chalk.blue.bold('<<'), subscribeMsg)
 socket.send(
   JSON.stringify({
     ...subscribeMsg,
-    authorization: await signWithAWSV4(httpDomain, JSON.stringify({ channel }), region),
+    authorization: await signWithAWSV4(httpDomain, region, JSON.stringify({ channel })),
   }),
 )
 
@@ -97,10 +91,14 @@ function onMessage(event) {
     process.stdout.write(chalk.magenta(`KA${kaCount > 1 ? ` (x${kaCount})` : ''}`) + '\r')
     return
   }
+
   if (kaCount > 0) {
     console.log('')
     kaCount = 0
   }
 
   console.log(chalk.blue.bold(`>> (${msg.type})`), data ?? msg)
+  if (msg.type === 'subscribe_error') {
+    process.exit(1)
+  }
 }
