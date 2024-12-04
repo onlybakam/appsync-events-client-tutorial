@@ -6,6 +6,8 @@ import { getAuthProtocolForIAM, signWithAWSV4, DEFAULT_HEADERS } from './signer-
 
 let kaCount = 0
 
+const AWS_APPSYNC_EVENTS_SUBPROTOCOL = 'aws-appsync-event-ws'
+
 // Retrieve the api-id and the channel from the command line
 const argv = minimist(process.argv.slice(2), { string: ['api-id', 'channel', 'domain', 'region'] })
 
@@ -49,12 +51,14 @@ const wsDomain = argv.domain ?? api.dns.REALTIME
 const auth = await getAuthProtocolForIAM(httpDomain, region)
 
 // Connect to the WebSocket
-console.log(`\n[ Opening WebSocket to wss://${wsDomain}/event/realtime ]\n`)
+console.log(chalk.inverse.bold(`\n* Opening WebSocket to wss://${wsDomain}/event/realtime *\n`))
 
 const socket = await new Promise((resolve, reject) => {
-  const socket = new WebSocket(`wss://${wsDomain}/event/realtime`, ['aws-appsync-event-ws', auth], {
-    headers: { ...DEFAULT_HEADERS },
-  })
+  const socket = new WebSocket(
+    `wss://${wsDomain}/event/realtime`,
+    [AWS_APPSYNC_EVENTS_SUBPROTOCOL, auth],
+    { headers: { ...DEFAULT_HEADERS } },
+  )
 
   socket.onopen = () => {
     const initMsg = { type: 'connection_init' }
@@ -62,9 +66,8 @@ const socket = await new Promise((resolve, reject) => {
     console.log(chalk.blue.bold('<<'), initMsg)
     resolve(socket)
   }
-  socket.onclose = (evt) => reject(new Error(evt.reason))
-  // socket.onmessage = (event) => console.log(chalk.blue.bold('>>'), JSON.parse(event.data))
   socket.onmessage = onMessage
+  socket.onclose = (event) => reject(new Error(event.reason))
   socket.onerror = (event) => console.log(event)
 })
 
