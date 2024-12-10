@@ -91,7 +91,7 @@ function onMessage(event) {
 
   if (msg.type === 'ka') {
     kaCount++
-    process.stdout.write(chalk.magenta(`KA${kaCount > 1 ? ` (x${kaCount})` : ''}`) + '\r')
+    process.stdout.write(`${chalk.magenta(`KA${kaCount > 1 ? ` (x${kaCount})` : ''}`)}\r`)
     return
   }
 

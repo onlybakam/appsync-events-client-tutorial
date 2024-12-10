@@ -5,9 +5,6 @@ import { SignatureV4 } from '@smithy/signature-v4'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
 import { Sha256 } from '@aws-crypto/sha256-js'
 
-// NOTE: if in browser, use this instead:
-// import { WebCryptoSha256 as Sha256 } from '@aws-crypto/sha256-browser'
-
 // The default headers to to sign the request
 export const DEFAULT_HEADERS = {
   accept: 'application/json, text/javascript',
@@ -45,12 +42,10 @@ export async function signWithAWSV4(httpDomain, region, body) {
 
   const signedHttpRequest = await signer.sign(request)
 
-  const signed = {
+  return {
     host: signedHttpRequest.hostname,
     ...signedHttpRequest.headers,
   }
-
-  return signed
 }
 
 /**
