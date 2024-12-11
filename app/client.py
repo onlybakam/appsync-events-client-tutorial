@@ -6,17 +6,10 @@ import uuid
 import argparse
 from websocket import WebSocketApp
 from botocore.session import Session
-from botocore.credentials import Credentials
 from termcolor import colored
-from signer import sign, get_auth_protocol
+from signer import sign, get_auth_protocol, DEFAULT_HEADERS
 
 kaCount = 0
-
-DEFAULT_HEADERS = {
-    'accept': 'application/json, text/javascript',
-    'content-encoding': 'amz-1.0',
-    'content-type': 'application/json; charset=UTF-8',
-}
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -35,10 +28,6 @@ def get_api(api_id):
     except Exception as e:
         print(f"Error: {str(e)}")
         sys.exit(1)
-
-def get_session_token():
-    sts = my_session.create_client('sts', region_name=args.region)
-    return sts.get_session_token(DurationSeconds=3600)
 
 def on_message(_, received):
     global kaCount
@@ -103,9 +92,7 @@ if __name__ == "__main__":
     ws_domain = api['dns']['REALTIME'] if api else args.domain
 
 
-    tokens = get_session_token()
-    creds = tokens["Credentials"]
-    credentials = Credentials(creds['AccessKeyId'], creds['SecretAccessKey'], creds['SessionToken'])
+    credentials = my_session.get_credentials()
 
     ws = WebSocketApp(
         f"wss://{ws_domain}/event/realtime",

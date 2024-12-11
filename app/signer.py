@@ -1,10 +1,10 @@
 import re
 import base64
 import json
+from urllib.parse import urlparse
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.credentials import Credentials
-from urllib.parse import urlparse
 
 DEFAULT_HEADERS = {
     'accept': 'application/json, text/javascript',
