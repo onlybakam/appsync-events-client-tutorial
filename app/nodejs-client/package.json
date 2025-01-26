@@ -1,0 +1,23 @@
+{
+  "name": "nodejs-client",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "ws": "^8.18.0",
+    "zx": "^8.3.0"
+  },
+  "dependencies": {
+    "@aws-crypto/sha256-js": "^5.2.0",
+    "@aws-sdk/client-appsync": "^3.734.0",
+    "@aws-sdk/credential-providers": "^3.734.0",
+    "@smithy/protocol-http": "^5.0.1",
+    "@smithy/signature-v4": "^5.0.1"
+  }
+}
