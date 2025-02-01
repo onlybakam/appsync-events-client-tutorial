@@ -1,20 +1,26 @@
-#!/usr/bin/env zx
-
+import util from 'node:util'
 import { WebSocket } from 'ws'
 import { AppSyncClient, GetApiCommand } from '@aws-sdk/client-appsync'
-import { getAuthProtocolForIAM, signWithAWSV4, DEFAULT_HEADERS } from './signer-smithy.mjs'
+import {
+  getAuthProtocolForIAM,
+  signWithAWSV4,
+  DEFAULT_HEADERS,
+  AWS_APPSYNC_EVENTS_SUBPROTOCOL,
+} from './signer-smithy.mjs'
 
 let kaCount = 0
 
-const AWS_APPSYNC_EVENTS_SUBPROTOCOL = 'aws-appsync-event-ws'
+// Retrieve information from the command
 
-// Retrieve the api-id and the channel from the command line
-const argv = minimist(process.argv.slice(2), { string: ['api-id', 'channel', 'domain', 'region'] })
+const argv = minimist(process.argv.slice(2), {
+  string: ['api-id', 'channel', 'domain', 'region'],
+  boolean: ['verbose'],
+})
 
 if (!argv['api-id'] && !argv.domain) {
   console.log(
     chalk.red(
-      'Usage: subscribe --api-id <id> | --domain <domain> --region <region> [--channel <path>]',
+      'Usage: subscribe --api-id <id> | --domain <domain> --region <region> [--channel <path> --verbose]',
     ),
   )
   process.exit(1)
@@ -32,8 +38,8 @@ if (!argv.region) {
 
 const region = argv.region
 const appsync = new AppSyncClient({ region })
-
 const channel = argv.channel || '/default/*'
+const verbose = argv.verbose
 
 // Fetch the api using the AWS ClI.
 let api
@@ -48,7 +54,13 @@ if (argv['api-id']) {
 }
 const httpDomain = argv.domain ?? api.dns.HTTP
 const wsDomain = argv.domain ?? api.dns.REALTIME
-const auth = await getAuthProtocolForIAM(httpDomain, region)
+
+// Get the authorization
+let authorization = await getAuthProtocolForIAM(httpDomain, region)
+
+if (verbose) {
+  console.log(authorization, '\n')
+}
 
 // Connect to the WebSocket
 console.log(chalk.inverse.bold(`\n* Opening WebSocket to wss://${wsDomain}/event/realtime *\n`))
@@ -56,16 +68,14 @@ console.log(chalk.inverse.bold(`\n* Opening WebSocket to wss://${wsDomain}/event
 const socket = await new Promise((resolve, reject) => {
   const socket = new WebSocket(
     `wss://${wsDomain}/event/realtime`,
-    [AWS_APPSYNC_EVENTS_SUBPROTOCOL, auth],
+    [AWS_APPSYNC_EVENTS_SUBPROTOCOL, authorization],
     { headers: { ...DEFAULT_HEADERS } },
   )
 
   socket.onopen = () => {
-    const initMsg = { type: 'connection_init' }
-    socket.send(JSON.stringify(initMsg))
-    console.log(chalk.blue.bold('<<'), initMsg)
     resolve(socket)
   }
+
   socket.onmessage = onMessage
   socket.onclose = (event) => reject(new Error(event.reason))
   socket.onerror = (event) => console.log(event)
@@ -73,34 +83,40 @@ const socket = await new Promise((resolve, reject) => {
 
 // Create and send the subscription request
 const subscribeMsg = { type: 'subscribe', id: crypto.randomUUID(), channel }
-console.log(chalk.blue.bold('<<'), subscribeMsg)
-socket.send(
-  JSON.stringify({
-    ...subscribeMsg,
-    authorization: await signWithAWSV4(httpDomain, region, JSON.stringify({ channel })),
-  }),
-)
+authorization = await signWithAWSV4(httpDomain, region, JSON.stringify({ channel }))
+
+if (verbose) {
+  console.log(authorization, '\n')
+}
+
+console.log(chalk.blue.bold('<<'))
+console.log(subscribeMsg)
+console.log()
+socket.send(JSON.stringify({ ...subscribeMsg, authorization }))
 
 /**
  * on message handler for the WebSocket
- * @param {import('ws').MessageEvent} event the websocket event
  */
 function onMessage(event) {
   const msg = JSON.parse(event.data)
   const data = msg.type === 'data' ? JSON.parse(msg.event) : null
+  const date = new Date().toISOString().split('T')[1]
 
   if (msg.type === 'ka') {
     kaCount++
-    process.stdout.write(`${chalk.magenta(`KA${kaCount > 1 ? ` (x${kaCount})` : ''}`)}\r`)
+    process.stdout.write(`${chalk.magenta(`<keep alive>${kaCount > 1 ? ` (x${kaCount})` : ''}`)}\r`)
     return
   }
 
   if (kaCount > 0) {
-    console.log('')
+    console.log('\n')
     kaCount = 0
   }
 
-  console.log(chalk.blue.bold(`>> (${msg.type})`), data ?? msg)
+  console.log(chalk.blue.bold(`>> (${msg.type} :: ${date})`))
+  console.log(data ? util.inspect(data, { colors: true }) : msg)
+  console.log()
+
   if (msg.type === 'subscribe_error') {
     process.exit(1)
   }

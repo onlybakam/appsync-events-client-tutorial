@@ -5,7 +5,10 @@ import { SignatureV4 } from '@smithy/signature-v4'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
 import { Sha256 } from '@aws-crypto/sha256-js'
 
-// The default headers to to sign the request
+// They AppSync Events WebSocket SubProtocol
+export const AWS_APPSYNC_EVENTS_SUBPROTOCOL = 'aws-appsync-event-ws'
+
+// The default headers for the request
 export const DEFAULT_HEADERS = {
   accept: 'application/json, text/javascript',
   'content-encoding': 'amz-1.0',
@@ -14,7 +17,6 @@ export const DEFAULT_HEADERS = {
 
 /**
  * Returns a signed authorization object
- *
  * @param {string} httpDomain the AppSync Event API HTTP domain
  * @param {string} region the AWS region of your API
  * @param {string} [body] the body of the request
